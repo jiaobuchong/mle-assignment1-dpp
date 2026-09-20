@@ -1,0 +1,170 @@
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Type checkers / linters
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# pyenv / pipenv / poetry / pdm / uv
+Pipfile.lock
+poetry.lock
+.pdm.toml
+.pdm-python
+.pdm-build/
+uv.lock
+
+# Jupyter
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+profile_default/
+ipython_config.py
+
+# Sphinx / mkdocs
+docs/_build/
+site/
+
+# ---------------------------------------------------------------------------
+# PyCharm / JetBrains
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.idea_modules/
+cmake-build-*/
+atlassian-ide-plugin.xml
+com_crashlytics_export_strings.xml
+crashlytics.properties
+crashlytics-build.properties
+fabric.properties
+
+# ---------------------------------------------------------------------------
+# Other editors
+# ---------------------------------------------------------------------------
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------------------------------------
+# OS
+# ---------------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ---------------------------------------------------------------------------
+# ML / data science
+# ---------------------------------------------------------------------------
+# Experiment tracking
+mlruns/
+mlflow.db
+wandb/
+.neptune/
+tensorboard/
+runs/
+lightning_logs/
+
+# Model artifacts and checkpoints
+*.pkl
+*.pickle
+*.joblib
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+checkpoints/
+models/
+
+# Large data files (uncomment or adjust as needed)
+# data/
+# *.csv
+# *.parquet
+
+# Spark / Hadoop
+spark-warehouse/
+metastore_db/
+derby.log
+*.crc
+_SUCCESS
+
+# Logs and temp
+*.log
+logs/
+tmp/
+temp/
+
+# Secrets
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.yaml
+secrets.json
