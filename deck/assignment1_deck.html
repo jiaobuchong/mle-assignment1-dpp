@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Loan Default Feature Store</title>
+<meta name="description" content="CS611 Assignment 1 slideument: data processing pipelines on the Medallion Architecture for a loan default feature store">
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #0b0b0b; font-size: 14px; line-height: 1.4;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    --navy: #12263f; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --line: rgba(11,11,11,0.10); --grid: #e1e0d9; --card: #f7f7f5;
+    --blue: #2a78d6; --blue-2: #86b6ef; --blue-3: #cde2fb;
+    --bronze: #b07a45; --bronze-bg: #f4ebe1; --silver: #7f858c; --silver-bg: #eef0f2; --gold: #c2921f; --gold-bg: #fbf3dc;
+    --good: #0ca30c; --critical: #d03b3b;
+  }
+  .slide { width: 1280px; height: 720px; position: relative; overflow: hidden; page-break-after: always; padding: 40px 56px 62px; display: flex; flex-direction: column; background: #fff; }
+  .slide:last-child { page-break-after: auto; }
+  .kicker { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--blue); font-weight: 700; margin-bottom: 8px; }
+  h1 { font-size: 27px; line-height: 1.2; font-weight: 700; color: var(--navy); margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lead { font-size: 15px; color: var(--ink-2); margin: 0 0 18px; max-width: 1080px; }
+  .body { flex: 1; display: flex; gap: 28px; min-height: 0; }
+  .col { min-width: 0; }
+  .footer { position: absolute; left: 56px; right: 56px; bottom: 18px; display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px; }
+  .footer b { color: var(--ink-2); font-weight: 600; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--navy); margin: 0 0 8px; font-weight: 700; }
+  p { margin: 0 0 8px; }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 0 0 6px; }
+  li b, p b { font-weight: 600; color: var(--ink); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .note { font-size: 12px; color: var(--ink-2); }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; background: #eeeeea; padding: 1px 5px; border-radius: 4px; color: var(--navy); }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; border-bottom: 1px solid #c3c2b7; }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.compact { font-size: 12px; } table.compact td { padding: 4px 8px; } table.compact th { padding: 5px 8px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .tile .v { font-size: 30px; font-weight: 700; color: var(--navy); line-height: 1.1; }
+  .tile .l { font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; letter-spacing: 0.04em; }
+  .tag.bronze { background: var(--bronze-bg); color: #7a4f24; } .tag.silver { background: var(--silver-bg); color: #4b5158; } .tag.gold { background: var(--gold-bg); color: #7a5a0d; }
+  .layer { border-radius: 8px; border: 1px solid var(--line); padding: 10px 12px; }
+  .layer.bronze { background: var(--bronze-bg); } .layer.silver { background: var(--silver-bg); } .layer.gold { background: var(--gold-bg); } .layer.src { background: #fff; } .layer.ml { background: #e8f0fb; }
+  .layer h3 { margin: 0 0 6px; font-size: 13px; color: var(--navy); }
+  .box { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12px; margin-bottom: 6px; }
+  .box .mono { background: none; padding: 0; font-size: 11px; color: var(--ink-2); }
+  .chart-title { font-size: 12.5px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .chart-sub { font-size: 11.5px; color: var(--ink-2); margin-bottom: 6px; }
+  svg text { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--ink-2); margin-top: 6px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--c); }
+  pre { margin: 0; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; line-height: 1.45; background: #12263f; color: #e6eef8; border-radius: 8px; padding: 12px 14px; }
+  pre .c { color: #9fb3c8; }
+</style>
+</head>
+<body>
+
+<!-- ============================== 1 TITLE ============================== -->
+<section class="slide" style="justify-content: center; padding-left: 72px;">
+  <div style="position:absolute; left:0; top:0; bottom:0; width:14px; background: linear-gradient(180deg, var(--bronze) 0 33.3%, var(--silver) 33.3% 66.6%, var(--gold) 66.6% 100%);"></div>
+  <div class="kicker">CS611 Machine Learning Engineering &nbsp;·&nbsp; Assignment 1 &nbsp;·&nbsp; Data Processing Pipelines</div>
+  <h1 style="font-size: 44px; max-width: 980px; margin-bottom: 14px;">A leakage-free feature store for predicting loan default at the point of application</h1>
+  <p class="lead" style="font-size: 19px; max-width: 900px;">Production style data pipelines on the Medallion Architecture (bronze &rarr; silver &rarr; gold), built with PySpark and Docker, that prepare the feature store and label store for the model in Assignment 2.</p>
+  <div style="display:flex; gap: 40px; margin-top: 26px; font-size: 14px; color: var(--ink-2);">
+    <div><b style="color: var(--ink);">Jaxson Chou</b><br>Data Scientist, Consumer Lending</div>
+    <div><b style="color: var(--ink);">September 2026</b><br>Version 1.0</div>
+    <div><b style="color: var(--ink);">Code</b><br>github.com/jiaobuchong/mle-assignment1-dpp</div>
+  </div>
+  <div class="card" style="margin-top: 40px; max-width: 1040px; display:flex; gap: 28px; align-items: flex-start;">
+    <div style="flex: 0 0 200px;"><h2 style="margin-bottom:4px;">How to read this deck</h2><p class="note">Every title states the takeaway and the body carries the evidence, so it reads as a document without a presenter.</p></div>
+    <div style="flex:1; font-size: 12.5px; color: var(--ink-2); columns: 3; column-gap: 24px;">
+      <div>2 &nbsp;Executive summary</div><div>3 &nbsp;The raw data</div><div>4 &nbsp;Architecture</div>
+      <div>5 &nbsp;Bronze layer</div><div>6 &nbsp;Silver layer</div><div>7 &nbsp;Gold feature store</div>
+      <div>8 &nbsp;Leakage controls</div><div>9 &nbsp;Validation</div><div>10 How to run &amp; next steps</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 2 EXECUTIVE SUMMARY ============================== -->
+<section class="slide">
+  <div class="kicker">Executive summary</div>
+  <h1>Four raw feeds now flow into one ML-ready feature store and one label store, with every feature restricted to what the bank knew on application day</h1>
+  <p class="lead">The pipeline is reproducible from a single command, partitioned by month so it can run as a scheduled job, and validated with a simple model that trains and generalises out of time.</p>
+  <div class="body">
+    <div class="col" style="flex: 0 0 640px;">
+      <h2>The problem</h2>
+      <p>The bank lends cash loans and wants to predict, at the moment of application, whether a customer will default (defined as 30+ days past due six months into the loan). This assignment prepares the data; Assignment 2 trains the model.</p>
+      <h2 style="margin-top: 12px;">What was built</h2>
+      <ul>
+        <li><b>Bronze</b>: raw monthly snapshots of the loan ledger, clickstream, customer attributes and financials, landed untouched and partitioned by <code>snapshot_date</code>.</li>
+        <li><b>Silver</b>: typed and cleaned tables. Corrupted values (placeholders, stray underscores, impossible ages and account counts) become typed columns or explicit nulls.</li>
+        <li><b>Gold</b>: a <b>feature store</b> (one row per customer per application month, 110 numeric features) and the Lab 2 <b>label store</b> (one row per loan, label observed at month 6).</li>
+      </ul>
+      <h2 style="margin-top: 12px;">Design decisions that matter</h2>
+      <ul>
+        <li><b>Point-in-time correctness</b>: clickstream is aggregated over a 6-month window that ends at the application month; the 61% of clickstream rows dated after the application are never read.</li>
+        <li><b>No silent fixes</b>: implausible values become null, never a clipped or guessed number.</li>
+        <li><b>Gold is numeric but un-imputed</b>: scaling and imputation are model decisions fitted on the training split only, which prevents train-test contamination.</li>
+        <li><b>One function per table per layer</b>, same pattern as Lab 2, orchestrated by <code>main.py</code> as a monthly backfill.</li>
+      </ul>
+    </div>
+    <div class="col" style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start;">
+      <div class="tile"><div class="v">4 &rarr; 10</div><div class="l">raw feeds turned into 10 tables across bronze, silver and gold</div></div>
+      <div class="tile"><div class="v">24</div><div class="l">monthly partitions per table, Jan 2023 to Dec 2024, rebuilt in 61 seconds</div></div>
+      <div class="tile"><div class="v">110</div><div class="l">numeric features per customer application, 11,974 rows in the feature store</div></div>
+      <div class="tile"><div class="v">8,974</div><div class="l">labelled loans in the label store, 28.9% default rate, every one matched to features</div></div>
+      <div class="tile" style="grid-column: 1 / -1;"><div class="v">0.86 AUC</div><div class="l">out-of-time sanity model (logistic regression 0.855, gradient boosting 0.870): predictive, and far from the ~1.0 that would signal leakage</div></div>
+    </div>
+  </div>
+  <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>2 / 10</span></div>
+</section>
+
+<!-- ============================== 3 DATA ============================== -->
+<section class="slide">
+  <div class="kicker">The raw data</div>
+  <h1>Three feature feeds describe the customer at application; the loan ledger is only ever used for labels</h1>
+  <p class="lead">Exploratory analysis established the grain of every file, how the files join, and which values cannot be trusted. Two findings shaped the whole design.</p>
+  <div class="body" style="flex-direction: column; gap: 14px;">
+    <table class="compact">
+      <thead><tr><th style="width: 190px;">Source file</th><th style="width: 170px;">Grain</th><th class="num" style="width: 80px;">Rows</th><th style="width: 250px;">Coverage</th><th style="width: 150px;">Role in pipeline</th><th>Quality issues observed in EDA</th></tr></thead>
+      <tbody>
+        <tr><td><code>lms_loan_daily.csv</code></td><td>loan &times; month (installment 0 to 10)</td><td class="num">137,500</td><td>12,500 loans, one per customer, started Jan 2023 to Jan 2025, tracked to Nov 2025</td><td>Label store (Lab 2). <b>Never</b> a feature source.</td><td>Clean. Loan amount (10,000) and tenure (10) are constant, so they carry no signal.</td></tr>
+        <tr><td><code>features_attributes.csv</code></td><td>customer at application</td><td class="num">12,500</td><td>One row per customer; <code>snapshot_date</code> equals the loan start month for 100% of customers</td><td>Demographic features</td><td>Age as text with stray underscores and values such as -500 and 8,678; occupation placeholder <code>_______</code> (7%); SSN garbage <code>#F%$D@*&amp;8</code> (5.6%); name and SSN are PII.</td></tr>
+        <tr><td><code>features_financials.csv</code></td><td>customer at application</td><td class="num">12,500</td><td>Same population and dates as attributes</td><td>Financial profile features</td><td>52% of rows carry at least one defect: trailing <code>_</code> on numbers, placeholders <code>__10000__</code> / <code>_</code> / <code>!@9#%8</code>, impossible counts (1,756 bank accounts, 5,789% interest), credit history as text, loan types as a comma list.</td></tr>
+        <tr><td><code>feature_clickstream.csv</code></td><td>customer &times; month</td><td class="num">215,376</td><td>8,974 customers &times; 24 months (Jan 2023 to Dec 2024), exactly the customers that receive a label</td><td>Behavioural features</td><td>Clean values, but 61% of rows are dated <b>after</b> the customer's application: a temporal leakage trap if joined naively.</td></tr>
+      </tbody>
+    </table>
+    <div style="display:flex; gap: 20px; flex: 1;">
+      <div class="card" style="flex: 0 0 380px; padding: 10px 14px;">
+        <h2>Finding 1: the application month is the join key</h2>
+        <p class="note" style="font-size: 12.5px;">Attributes and financials are captured exactly once, in the month the loan starts. The feature store therefore uses <code>Customer_ID</code> + application <code>snapshot_date</code> as its grain, and the label (observed 6 months later) joins back through that date.</p>
+      </div>
+      <div class="card" style="flex: 1; padding: 10px 14px;">
+        <h2>Finding 2: most clickstream rows are from the future</h2>
+        <div class="chart-sub">Clickstream rows by timing relative to each customer's application month (215,376 rows)</div>
+        <svg width="740" height="54" viewBox="0 0 740 54" role="img" aria-label="Stacked bar: 35.3% of clickstream rows before application, 4.2% in the application month, 60.6% after">
+          <rect x="0" y="6" width="259" height="26" rx="4" fill="#2a78d6"/>
+          <rect x="261" y="6" width="29" height="26" rx="4" fill="#86b6ef"/>
+          <rect x="292" y="6" width="444" height="26" rx="4" fill="#c3c2b7"/>
+          <text x="8" y="24" font-size="12" font-weight="600" fill="#ffffff">75,934 rows · 35.3%</text>
+          <text x="300" y="24" font-size="12" font-weight="600" fill="#0b0b0b">130,468 rows · 60.6% dated after the application: excluded from every feature</text>
+          <text x="275" y="50" font-size="11" fill="#52514e" text-anchor="middle">8,974 · 4.2%</text>
+        </svg>
+        <div class="legend"><span style="--c:#2a78d6">Before application (usable history)</span><span style="--c:#86b6ef">Application month (usable)</span><span style="--c:#c3c2b7">After application (excluded)</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>3 / 10</span></div>
+</section>
+
+<!-- ============================== 4 ARCHITECTURE ============================== -->
+<section class="slide">
+  <div class="kicker">Architecture</div>
+  <h1>Each source moves through bronze, silver and gold as an independent monthly job; the gold layer serves exactly two tables to the model</h1>
+  <p class="lead">Ten tables, each partitioned by <code>snapshot_date</code> with one file per month. Every partition can be rebuilt from the layer before it, so a bug fix is a re-run, not a manual repair.</p>
+  <div class="body" style="flex-direction: column; gap: 14px;">
+    <div style="display: grid; grid-template-columns: 170px 28px 220px 28px 220px 28px 260px 28px 160px; gap: 0; align-items: stretch;">
+      <div class="layer src"><h3>Raw sources</h3>
+        <div class="box">lms_loan_daily.csv</div><div class="box">feature_clickstream.csv</div><div class="box">features_attributes.csv</div><div class="box">features_financials.csv</div>
+        <div class="note" style="font-size:11px;">csv files stand in for the back end systems</div></div>
+      <div style="display:flex; align-items:center; justify-content:center; font-size: 22px; color: var(--muted);">&rarr;</div>
+      <div class="layer bronze"><h3><span class="tag bronze">Bronze</span> &nbsp;raw copy</h3>
+        <div class="box">lms <span class="mono">bronze_loan_daily_&lt;date&gt;.csv</span></div><div class="box">clickstream <span class="mono">bronze_clickstream_&lt;date&gt;.csv</span></div><div class="box">attributes <span class="mono">bronze_attributes_&lt;date&gt;.csv</span></div><div class="box">financials <span class="mono">bronze_financials_&lt;date&gt;.csv</span></div></div>
+      <div style="display:flex; align-items:center; justify-content:center; font-size: 22px; color: var(--muted);">&rarr;</div>
+      <div class="layer silver"><h3><span class="tag silver">Silver</span> &nbsp;typed &amp; cleaned</h3>
+        <div class="box">loan_daily <span class="mono">+ mob, dpd</span></div><div class="box">clickstream <span class="mono">typed</span></div><div class="box">attributes <span class="mono">age, occupation rules</span></div><div class="box">financials <span class="mono">placeholders, ranges, credit history</span></div></div>
+      <div style="display:flex; align-items:center; justify-content:center; font-size: 22px; color: var(--muted);">&rarr;</div>
+      <div class="layer gold"><h3><span class="tag gold">Gold</span> &nbsp;ML-ready</h3>
+        <div class="box"><b>label_store</b> <span class="mono">loan_id, Customer_ID, label, label_def, snapshot_date</span></div>
+        <div class="box"><b>feature_store</b> <span class="mono">Customer_ID, snapshot_date + 110 features (demographics, financials, ratios, loan portfolio, clickstream)</span></div>
+        <div class="note" style="font-size:11px;">parquet, one row per customer per application month</div></div>
+      <div style="display:flex; align-items:center; justify-content:center; font-size: 22px; color: var(--muted);">&rarr;</div>
+      <div class="layer ml"><h3>Consumers</h3><div class="box">Model training pipeline (Assignment 2)</div><div class="box">Monitoring &amp; analytics</div></div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;">
+      <div class="card"><h2><span class="tag bronze">Bronze</span> &nbsp;land it as it arrived</h2><p class="note">A faithful copy of each source snapshot, one csv per <code>snapshot_date</code>. No filtering beyond the snapshot, no type changes. This is the audit trail and the replay point.</p></div>
+      <div class="card"><h2><span class="tag silver">Silver</span> &nbsp;make it trustworthy</h2><p class="note">Schema enforced column by column, corrupted values nulled by explicit rules, credit history text turned into months. Still one row per source row, stored as parquet.</p></div>
+      <div class="card"><h2><span class="tag gold">Gold</span> &nbsp;make it useful for the model</h2><p class="note">Joins across sources, feature engineering and encoding. Only here do rows change grain: the feature store is keyed by customer and application month, the label store by loan.</p></div>
+    </div>
+    <div class="card" style="display:flex; gap: 26px; font-size: 12.5px; padding: 10px 16px;">
+      <div><b>Stack</b> &nbsp;PySpark 3.5 · Parquet · Docker (Python 3.12, OpenJDK 17) · JupyterLab</div>
+      <div><b>Code</b> &nbsp;<code>main.py</code> orchestrates; <code>utils/</code> holds one module per layer with one function per table</div>
+      <div><b>Schedule</b> &nbsp;monthly backfill loop, 24 runs (2023-01 to 2024-12), 61 s end to end</div>
+    </div>
+  </div>
+  <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>4 / 10</span></div>
+</section>
+
+<!-- ============================== 5 BRONZE ============================== -->
+<section class="slide">
+  <div class="kicker"><span class="tag bronze">Bronze</span> &nbsp; Raw ingestion</div>
+  <h1>Bronze keeps a faithful, replayable copy of every source snapshot, using the same ingestion pattern as Lab 2 for all four feeds</h1>
+  <p class="lead">Nothing is interpreted at this stage. If a cleaning rule turns out to be wrong later, silver and gold are rebuilt from bronze without touching the source systems again.</p>
+  <div class="body">
+    <div class="col" style="flex: 0 0 520px;">
+      <h2>Design choices</h2>
+      <ul>
+        <li><b>One partition per <code>snapshot_date</code>.</b> A monthly job reads the source, keeps the rows of that snapshot and writes <code>bronze_&lt;table&gt;_YYYY_MM_DD.csv</code>. Backfilling history and running the next month are the same code path.</li>
+        <li><b>Raw fidelity over convenience.</b> Values such as <code>52312.68_</code> or <code>__10000__</code> are landed exactly as received; csv keeps them human-readable for investigation.</li>
+        <li><b>Two small functions, four sources.</b> The Lab 2 function is kept as is for the loan ledger; a second one takes the table name and csv path and is called three times from <code>main.py</code>, so adding a feed is one more call.</li>
+        <li><b>Source-system boundary.</b> In production the csv read is the only line that changes: it becomes the database or API connector.</li>
+      </ul>
+      <pre style="margin-top: 10px;"><span class="c"># utils/data_processing_bronze_table.py</span>
+df = spark.read.csv(csv_file_path, header=True, inferSchema=True) \
+          .filter(col("snapshot_date") == snapshot_date)
+partition_name = "bronze_" + table_name + "_" + date + ".csv"
+df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
+    </div>
+    <div class="col" style="flex: 1;">
+      <h2>Bronze tables produced by <code>main.py</code> (24 monthly partitions each)</h2>
+      <table>
+        <thead><tr><th>Table</th><th>Partition file</th><th class="num">Rows / partition</th><th class="num">Rows, 24 months</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td>lms</td><td><code>bronze_loan_daily_&lt;date&gt;.csv</code></td><td class="num">530 &rarr; 5,531</td><td class="num">104,288</td><td>Ledger grows as loans accumulate</td></tr>
+          <tr><td>clickstream</td><td><code>bronze_clickstream_&lt;date&gt;.csv</code></td><td class="num">8,974</td><td class="num">215,376</td><td>Same customer set every month</td></tr>
+          <tr><td>attributes</td><td><code>bronze_attributes_&lt;date&gt;.csv</code></td><td class="num">454 to 543</td><td class="num">11,974</td><td>That month's applicants</td></tr>
+          <tr><td>financials</td><td><code>bronze_financials_&lt;date&gt;.csv</code></td><td class="num">454 to 543</td><td class="num">11,974</td><td>That month's applicants</td></tr>
+        </tbody>
+      </table>
+      <div class="card" style="margin-top: 14px;">
+        <h2>Why csv here and parquet later</h2>
+        <p class="note">Bronze is optimised for inspection and replay: analysts open a partition in any tool and see the source byte for byte. Silver and gold are optimised for Spark reads and typed schemas, so they switch to parquet. The layout mirrors Lab 2, which makes the label store and the feature store look identical to their consumers.</p>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>5 / 10</span></div>
+</section>
+
+<!-- ============================== 6 SILVER ============================== -->
+<section class="slide">
+  <div class="kicker"><span class="tag silver">Silver</span> &nbsp; Schema and data quality</div>
+  <h1>Silver enforces the schema and applies explicit, documented rules so that a corrupted value becomes a null, never a plausible-looking guess</h1>
+  <p class="lead">Every rule was derived from the EDA and is written as a whitelist or a plausible range in code, so a reviewer can see exactly what was changed and why.</p>
+  <div class="body">
+    <div class="col" style="flex: 0 0 700px;">
+      <table>
+        <thead><tr><th style="width:150px;">Rule</th><th style="width:220px;">Raw example &rarr; silver</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td><b>Schema enforcement</b></td><td>all 4 tables cast column by column</td><td>Types are guaranteed downstream; dates become <code>DateType</code>, counts integers, amounts floats.</td></tr>
+          <tr><td><b>Stray underscore</b></td><td><code>52312.68_</code> &rarr; 52312.68, <code>3_</code> &rarr; 3</td><td>Formatting noise on otherwise valid numbers (8% of incomes, 5% of loan counts).</td></tr>
+          <tr><td><b>Placeholder starting with underscore</b></td><td><code>__10000__</code>, <code>_</code> &rarr; null</td><td>A sentinel, not a measurement; keeping 10,000 as an investment amount would be wrong.</td></tr>
+          <tr><td><b>Categorical whitelist</b></td><td><code>_______</code>, <code>_</code>, <code>!@9#%8</code> &rarr; null</td><td>Occupation, credit mix and payment behaviour only accept their known vocabularies.</td></tr>
+          <tr><td><b>Plausible ranges</b></td><td>Age (1 to 100), accounts and cards (0 to 20), interest (0 to 100%), loans (0 to 20), delayed payments and inquiries (0 to 50), EMI (&le; 5,000), income (&le; 300,000)</td><td>Values such as -500 years old, 1,756 bank accounts or 5,789% interest sit far outside a clear gap in the distribution.</td></tr>
+          <tr><td><b>Conform text to a number</b></td><td><code>10 Years and 9 Months</code> &rarr; 129</td><td>Credit history length becomes months, directly usable by a model.</td></tr>
+          <tr><td><b>PII left out</b></td><td>Name, SSN (incl. garbage <code>#F%$D@*&amp;8</code>)</td><td>Kept in silver for lineage only; the gold feature store never reads them.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col" style="flex: 1;">
+      <div class="chart-title">Share of application rows affected, by issue</div>
+      <div class="chart-sub">12,500 customer applications; a row can carry several defects (52% of financial rows do)</div>
+      <svg width="440" height="280" viewBox="0 0 440 280" role="img" aria-label="Bar chart of the share of rows affected per data quality issue">
+        <g font-size="11" fill="#52514e">
+          <text x="162" y="22" text-anchor="end">Credit mix "_"</text>
+          <text x="162" y="51" text-anchor="end">Num. of loans "_" / -100</text>
+          <text x="162" y="80" text-anchor="end">Payment behaviour code</text>
+          <text x="162" y="109" text-anchor="end">Annual income "_" / &gt;300k</text>
+          <text x="162" y="138" text-anchor="end">Age text / out of range</text>
+          <text x="162" y="167" text-anchor="end">Occupation "_______"</text>
+          <text x="162" y="196" text-anchor="end">SSN invalid</text>
+          <text x="162" y="225" text-anchor="end">Invested "__10000__"</text>
+        </g>
+        <line x1="170" y1="4" x2="170" y2="236" stroke="#c3c2b7" stroke-width="1"/>
+        <g fill="#2a78d6">
+          <rect x="170" y="8" width="220" height="19" rx="3"/>
+          <rect x="170" y="37" width="100" height="19" rx="3"/>
+          <rect x="170" y="66" width="84" height="19" rx="3"/>
+          <rect x="170" y="95" width="81" height="19" rx="3"/>
+          <rect x="170" y="124" width="79" height="19" rx="3"/>
+          <rect x="170" y="153" width="74" height="19" rx="3"/>
+          <rect x="170" y="182" width="59" height="19" rx="3"/>
+          <rect x="170" y="211" width="47" height="19" rx="3"/>
+        </g>
+        <g font-size="11" fill="#0b0b0b" font-weight="600">
+          <text x="395" y="22">20.9%</text>
+          <text x="275" y="51">9.5%</text>
+          <text x="259" y="80">8.0%</text>
+          <text x="256" y="109">7.7%</text>
+          <text x="254" y="138">7.5%</text>
+          <text x="249" y="167">7.0%</text>
+          <text x="234" y="196">5.6%</text>
+          <text x="222" y="225">4.5%</text>
+        </g>
+        <text x="8" y="252" font-size="10.5" fill="#898781">Eight further rules affect 1% to 4% of rows each</text>
+        <text x="8" y="265" font-size="10.5" fill="#898781">(EMI, cards, interest, credit limit, inquiries, accounts, debt, balance).</text>
+      </svg>
+      <div class="card" style="margin-top: 6px;">
+        <h2>Why null and not a fix</h2>
+        <p class="note">Clipping 1,756 accounts to 20 or filling an unknown age with the average would present an invented number as fact. Null is honest, is handled natively by gradient boosting models, and lets the model pipeline impute with statistics learned from the training split only.</p>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>6 / 10</span></div>
+</section>
+
+<!-- ============================== 7 GOLD ============================== -->
+<section class="slide">
+  <div class="kicker"><span class="tag gold">Gold</span> &nbsp; Feature store design</div>
+  <h1>The gold feature store holds one row per customer per application month with 110 numeric features in six groups, ready to join to the label store</h1>
+  <p class="lead">Feature engineering happens only here, from silver inputs, so every feature can be traced back to a cleaned column and a rule.</p>
+  <div class="body">
+    <div class="col" style="flex: 0 0 720px;">
+      <table class="compact">
+        <thead><tr><th style="width:170px;">Feature group</th><th class="num" style="width:60px;">Count</th><th>What it captures (examples)</th></tr></thead>
+        <tbody>
+          <tr><td><b>Demographics</b></td><td class="num">16</td><td><code>Age</code>, one-hot <code>occupation_*</code> (15 occupations; all zero = unknown)</td></tr>
+          <tr><td><b>Financial profile</b></td><td class="num">16</td><td>income, salary, bank accounts, credit cards, interest rate, loans, payment delay, delayed payments, credit limit change, inquiries, debt, utilisation, <code>Credit_History_Months</code>, EMI, investment, balance</td></tr>
+          <tr><td><b>Affordability ratios</b></td><td class="num">4</td><td><code>debt_to_income</code>, <code>emi_to_salary</code>, <code>invest_to_salary</code>, <code>balance_to_salary</code></td></tr>
+          <tr><td><b>Encoded categoricals</b></td><td class="num">4</td><td><code>credit_mix_score</code> (Bad 0 &lt; Standard 1 &lt; Good 2), <code>pays_min_amount</code>, <code>high_spent</code>, <code>payment_value_size</code> (Small 1 &lt; Medium 2 &lt; Large 3)</td></tr>
+          <tr><td><b>Existing loan portfolio</b></td><td class="num">9</td><td>one flag per loan type found in <code>Type_of_Loan</code>: auto, credit-builder, debt consolidation, home equity, mortgage, payday, personal, student, not specified (the count itself is <code>Num_of_Loan</code>)</td></tr>
+          <tr><td><b>Clickstream behaviour</b></td><td class="num">61</td><td>for each of <code>fe_1</code> to <code>fe_20</code>: value in the application month, 3-month and 6-month averages over the window ending there; plus the number of months observed</td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex; gap: 12px; margin-top: 10px;">
+        <div class="card" style="flex:1; padding: 10px 14px;"><h2>Grain and keys</h2><p class="note"><code>Customer_ID</code> + <code>snapshot_date</code> (application month). 11,974 rows, no duplicate keys, one parquet partition per month: <code>gold_feature_store_YYYY_MM_DD.parquet</code>.</p></div>
+        <div class="card" style="flex:1; padding: 10px 14px;"><h2>Join contract with the label store</h2><p class="note"><code>feature.Customer_ID = label.Customer_ID</code> and <code>feature.snapshot_date = add_months(label.snapshot_date, -6)</code>. The 6 months match the label definition <code>30dpd_6mob</code>.</p></div>
+      </div>
+    </div>
+    <div class="col" style="flex: 1;">
+      <div class="chart-title">Features per group (110 in total)</div>
+      <svg width="430" height="176" viewBox="0 0 430 176" role="img" aria-label="Bar chart of feature counts by group">
+        <g font-size="11.5" fill="#52514e">
+          <text x="140" y="18" text-anchor="end">Clickstream behaviour</text><text x="140" y="46" text-anchor="end">Demographics</text><text x="140" y="74" text-anchor="end">Financial profile</text>
+          <text x="140" y="102" text-anchor="end">Loan portfolio</text><text x="140" y="130" text-anchor="end">Affordability ratios</text><text x="140" y="158" text-anchor="end">Encoded categoricals</text>
+        </g>
+        <line x1="150" y1="2" x2="150" y2="168" stroke="#c3c2b7" stroke-width="1"/>
+        <g fill="#2a78d6">
+          <rect x="150" y="6"   width="248" height="18" rx="3"/><rect x="150" y="34"  width="65" height="18" rx="3"/><rect x="150" y="62"  width="65" height="18" rx="3"/>
+          <rect x="150" y="90"  width="37" height="18" rx="3"/><rect x="150" y="118" width="16" height="18" rx="3"/><rect x="150" y="146" width="16" height="18" rx="3"/>
+        </g>
+        <g font-size="11.5" fill="#0b0b0b" font-weight="600">
+          <text x="403" y="19">61</text><text x="220" y="47">16</text><text x="220" y="75">16</text><text x="192" y="103">9</text><text x="171" y="131">4</text><text x="171" y="159">4</text>
+        </g>
+      </svg>
+      <h2 style="margin-top: 8px;">Design principles</h2>
+      <ul style="font-size: 12.5px;">
+        <li><b>Numeric only.</b> Categories are one-hot, ordinal or counted in gold, so any classifier can consume the table directly.</li>
+        <li><b>Nulls are preserved, nothing is scaled or imputed.</b> Those steps depend on the training population and belong inside the model pipeline (fit on train, apply to test).</li>
+        <li><b>Point-in-time by construction.</b> Attributes and financials are read from the application month's partition; clickstream is filtered to the six months ending there.</li>
+        <li><b>No PII, no label information.</b> Name and SSN stop at silver; nothing from the loan ledger enters the feature store.</li>
+        <li><b>The window is a parameter.</b> The 6-month look-back is an argument of the gold job, so a longer history is a config change.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>7 / 10</span></div>
+</section>
+
+<!-- ============================== 8 LEAKAGE ============================== -->
+<section class="slide">
+  <div class="kicker">Leakage controls</div>
+  <h1>Features only see what the bank knew on application day: the window closes at month D, the label is read at month D+6, and nothing in between is used</h1>
+  <p class="lead">The three classic leakage paths were each closed by a structural decision in the pipeline rather than by a manual check.</p>
+  <div class="body" style="flex-direction: column; gap: 14px;">
+    <div class="card" style="padding: 12px 16px 8px;">
+      <svg width="1150" height="150" viewBox="0 0 1150 150" role="img" aria-label="Timeline: feature window from D-5 to D, application at D, label observed at D+6, months after D excluded">
+        <defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#c3c2b7" stroke-width="2"/></pattern></defs>
+        <!-- zones -->
+        <rect x="70" y="40" width="450" height="44" rx="6" fill="#cde2fb"/>
+        <rect x="520" y="40" width="450" height="44" rx="6" fill="url(#hatch)" opacity="0.9"/>
+        <!-- axis -->
+        <line x1="40" y1="106" x2="1110" y2="106" stroke="#c3c2b7" stroke-width="1.5"/>
+        <g font-size="11.5" fill="#52514e" text-anchor="middle">
+          <text x="70" y="126">D-6</text><text x="145" y="126">D-5</text><text x="220" y="126">D-4</text><text x="295" y="126">D-3</text><text x="370" y="126">D-2</text><text x="445" y="126">D-1</text>
+          <text x="520" y="126" font-weight="700" fill="#0b0b0b">D</text><text x="595" y="126">D+1</text><text x="670" y="126">D+2</text><text x="745" y="126">D+3</text><text x="820" y="126">D+4</text><text x="895" y="126">D+5</text>
+          <text x="970" y="126" font-weight="700" fill="#0b0b0b">D+6</text><text x="1045" y="126">D+7</text>
+        </g>
+        <g stroke="#c3c2b7" stroke-width="1"><line x1="70" y1="102" x2="70" y2="110"/><line x1="145" y1="102" x2="145" y2="110"/><line x1="220" y1="102" x2="220" y2="110"/><line x1="295" y1="102" x2="295" y2="110"/><line x1="370" y1="102" x2="370" y2="110"/><line x1="445" y1="102" x2="445" y2="110"/><line x1="595" y1="102" x2="595" y2="110"/><line x1="670" y1="102" x2="670" y2="110"/><line x1="745" y1="102" x2="745" y2="110"/><line x1="820" y1="102" x2="820" y2="110"/><line x1="895" y1="102" x2="895" y2="110"/><line x1="1045" y1="102" x2="1045" y2="110"/></g>
+        <!-- markers -->
+        <line x1="520" y1="30" x2="520" y2="106" stroke="#2a78d6" stroke-width="2.5"/>
+        <circle cx="520" cy="106" r="6" fill="#2a78d6" stroke="#fff" stroke-width="2"/>
+        <line x1="970" y1="30" x2="970" y2="106" stroke="#c2921f" stroke-width="2.5"/>
+        <circle cx="970" cy="106" r="6" fill="#c2921f" stroke="#fff" stroke-width="2"/>
+        <!-- labels -->
+        <text x="295" y="20" font-size="12.5" font-weight="700" fill="#12263f" text-anchor="middle">Feature window: clickstream months D-5 to D (6 months)</text>
+        <text x="295" y="58" font-size="11.5" fill="#12263f" text-anchor="middle">attributes + financials: read from partition D</text>
+        <text x="295" y="74" font-size="11.5" fill="#12263f" text-anchor="middle">clickstream: latest value, 3-month and 6-month averages</text>
+        <text x="745" y="67" font-size="12" fill="#52514e" text-anchor="middle">clickstream and ledger rows after D: never read by the feature job</text>
+        <text x="528" y="22" font-size="12.5" font-weight="700" fill="#2a78d6">D = application month (loan start)</text>
+        <text x="1140" y="22" font-size="12.5" font-weight="700" fill="#8a6612" text-anchor="end">Label observed at D+6: 30+ days past due at month 6</text>
+        <text x="1120" y="110" font-size="11" fill="#898781">time</text>
+      </svg>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; flex: 1;">
+      <div class="card"><h2>Temporal leakage</h2><p class="note" style="font-size:13px;"><b>Risk:</b> 61% of clickstream rows are dated after the application, and a naive join on the label's <code>snapshot_date</code> would use activity from month D+6.<br><b>Control:</b> the gold job keeps only clickstream rows with <code>0 &le; months before D &lt; 6</code>, so nothing dated after D is aggregated. Verified per customer: an applicant of June 2024 has 18 months of history, the window uses the last 6, and the 6 later months are untouched.</p></div>
+      <div class="card"><h2>Target leakage</h2><p class="note" style="font-size:13px;"><b>Risk:</b> repayment fields (overdue amount, days past due, balance) describe the outcome itself.<br><b>Control:</b> the loan ledger feeds only the label pipeline. No column from <code>lms_loan_daily</code> exists in the feature store, and the label store carries just the key, the label and its definition.</p></div>
+      <div class="card"><h2>Train-test contamination</h2><p class="note" style="font-size:13px;"><b>Risk:</b> scaling, imputing or encoding with statistics of the full dataset leaks the test set into training.<br><b>Control:</b> gold stores raw numeric values with nulls; no global statistic is computed in the pipeline. The sanity model splits by application month (train &lt; 2024, test 2024 H1) and fits its imputer and scaler on train only.</p></div>
+    </div>
+  </div>
+  <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>8 / 10</span></div>
+</section>
+
+<!-- ============================== 9 VALIDATION ============================== -->
+<section class="slide">
+  <div class="kicker">Validation</div>
+  <h1>The pipeline runs cleanly in Docker, every labelled loan finds its features, and a simple model generalises out of time with an AUC of 0.86</h1>
+  <p class="lead">Validation covers the mechanics (does it run, are the counts right), the contract (does the join work) and the substance (are the features predictive without leaking).</p>
+  <div class="body">
+    <div class="col" style="flex: 0 0 560px;">
+      <h2>Pipeline run (<code>python main.py</code>, 61 seconds)</h2>
+      <table class="compact">
+        <thead><tr><th>Layer</th><th class="num">Tables</th><th class="num">Partitions</th><th>Rows</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag bronze">Bronze</span></td><td class="num">4</td><td class="num">96</td><td>104,288 ledger · 215,376 clickstream · 11,974 attributes · 11,974 financials</td></tr>
+          <tr><td><span class="tag silver">Silver</span></td><td class="num">4</td><td class="num">96</td><td>same row counts, typed and cleaned, 0 duplicate keys</td></tr>
+          <tr><td><span class="tag gold">Gold</span></td><td class="num">2</td><td class="num">48</td><td>feature store 11,974 &times; 112 columns · label store 8,974 loans</td></tr>
+        </tbody>
+      </table>
+      <h2 style="margin-top: 14px;">Sanity model (<code>python sanity_check_model.py</code>, not part of the pipeline)</h2>
+      <table class="compact">
+        <thead><tr><th>Check</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Label rows matched to features via the join contract</td><td><b>8,974 of 8,974</b>, all with clickstream history</td></tr>
+          <tr><td>Out-of-time split by application month</td><td>train 5,958 (Jan to Dec 2023) · test 3,016 (Jan to Jun 2024)</td></tr>
+          <tr><td>Logistic regression (median impute + scale, fit on train)</td><td>train AUC 0.852 · <b>test AUC 0.855</b></td></tr>
+          <tr><td>Gradient boosting (nulls handled natively)</td><td>train AUC 0.941 · <b>test AUC 0.870</b></td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top: 8px;">Test AUC close to train AUC and well below 1.0 is the signature of an informative, leakage-free feature store. Strongest linear drivers: salary, income, 6-month clickstream averages, interest rate. Tuning is left to Assignment 2.</p>
+    </div>
+    <div class="col" style="flex: 1;">
+      <div class="chart-title">Default rate by application month (label store, 8,974 loans)</div>
+      <div class="chart-sub">Share of loans 30+ days past due at month 6. The base rate is stable around 29%, so the label is usable for training without re-weighting.</div>
+      <svg width="560" height="250" viewBox="0 0 560 250" role="img" aria-label="Line chart of the monthly default rate from January 2023 to June 2024, between 25.7% and 32.9%">
+        <g stroke="#e1e0d9" stroke-width="1">
+          <line x1="50" y1="20" x2="540" y2="20"/><line x1="50" y1="70" x2="540" y2="70"/><line x1="50" y1="120" x2="540" y2="120"/><line x1="50" y1="170" x2="540" y2="170"/>
+        </g>
+        <line x1="50" y1="220" x2="540" y2="220" stroke="#c3c2b7" stroke-width="1"/>
+        <g font-size="10.5" fill="#898781" text-anchor="end">
+          <text x="44" y="24">40%</text><text x="44" y="74">35%</text><text x="44" y="124">30%</text><text x="44" y="174">25%</text><text x="44" y="224">20%</text>
+        </g>
+        <line x1="50" y1="131.3" x2="540" y2="131.3" stroke="#898781" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="173" y="127" font-size="10.5" fill="#898781" text-anchor="middle">overall 28.9%</text>
+        <polyline fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" points="60,156 88.2,113 116.5,100 144.7,151 172.9,153 201.2,155 229.4,123 257.6,131 285.9,158 314.1,163 342.4,129 370.6,111 398.8,123 427.1,136 455.3,91 483.5,143 511.8,117 540,109"/>
+        <g fill="#2a78d6" stroke="#ffffff" stroke-width="2">
+          <circle cx="60" cy="156" r="4"/><circle cx="88.2" cy="113" r="4"/><circle cx="116.5" cy="100" r="4"/><circle cx="144.7" cy="151" r="4"/><circle cx="172.9" cy="153" r="4"/><circle cx="201.2" cy="155" r="4"/><circle cx="229.4" cy="123" r="4"/><circle cx="257.6" cy="131" r="4"/><circle cx="285.9" cy="158" r="4"/><circle cx="314.1" cy="163" r="4"/><circle cx="342.4" cy="129" r="4"/><circle cx="370.6" cy="111" r="4"/><circle cx="398.8" cy="123" r="4"/><circle cx="427.1" cy="136" r="4"/><circle cx="455.3" cy="91" r="4"/><circle cx="483.5" cy="143" r="4"/><circle cx="511.8" cy="117" r="4"/><circle cx="540" cy="109" r="4"/>
+        </g>
+        <g font-size="11" fill="#0b0b0b" font-weight="600">
+          <text x="60" y="176" text-anchor="middle">26.4%</text><text x="455.3" y="82" text-anchor="middle">32.9%</text><text x="314.1" y="182" text-anchor="middle">25.7%</text><text x="540" y="99" text-anchor="end">31.1%</text>
+        </g>
+        <g font-size="10.5" fill="#898781" text-anchor="middle">
+          <text x="60" y="238">Jan 23</text><text x="144.7" y="238">Apr 23</text><text x="229.4" y="238">Jul 23</text><text x="314.1" y="238">Oct 23</text><text x="398.8" y="238">Jan 24</text><text x="483.5" y="238">Apr 24</text><text x="540" y="238">Jun 24</text>
+        </g>
+      </svg>
+      <div class="card" style="margin-top: 8px;">
+        <h2>What was checked by hand</h2>
+        <ul class="note" style="font-size: 12px;">
+          <li>Clickstream aggregates recomputed from the raw file for a sample customer match the gold values exactly (latest, 3-month and 6-month means).</li>
+          <li>Occupation flags never exceed one per row; loan type flags match the text in <code>Type_of_Loan</code>; cleaned ages span 14 to 56, incomes stop at 180k.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>9 / 10</span></div>
+</section>
+
+<!-- ============================== 10 RUN & NEXT ============================== -->
+<section class="slide">
+  <div class="kicker">How to run &amp; next steps</div>
+  <h1>Two commands reproduce the whole datamart; the same modules are ready to be scheduled month by month and consumed by the model pipeline</h1>
+  <p class="lead">Everything runs inside the provided container, so reviewers need Docker and nothing else.</p>
+  <div class="body">
+    <div class="col" style="flex: 0 0 600px;">
+      <h2>Run it</h2>
+      <pre><span class="c"># 1. build and start the environment (JupyterLab on http://localhost:8888)</span>
+docker-compose build
+docker-compose up
+
+<span class="c"># 2. in a JupyterLab terminal: build bronze, silver and gold (about 1 minute)</span>
+python main.py
+
+<span class="c"># 3. optional: join feature and label store, fit the sanity model</span>
+python sanity_check_model.py</pre>
+      <h2 style="margin-top: 14px;">What <code>main.py</code> creates</h2>
+      <pre>datamart/
+  bronze/  lms/  clickstream/  attributes/  financials/     24 csv each
+  silver/  loan_daily/  clickstream/  attributes/  financials/  24 parquet each
+  gold/    label_store/  feature_store/                     24 parquet each</pre>
+      <h2 style="margin-top: 14px;">Submission contents</h2>
+      <p class="note"><code>main.py</code> · <code>Dockerfile</code> · <code>docker-compose.yaml</code> · <code>requirements.txt</code> · <code>utils/</code> (bronze, silver, gold modules) · <code>data/</code> · <code>Readme.txt</code> (repository link) · this deck as PDF. The <code>datamart/</code> folder is generated and excluded.</p>
+      <p class="note" style="margin-top: 6px;"><b>Repository:</b> github.com/jiaobuchong/mle-assignment1-dpp</p>
+    </div>
+    <div class="col" style="flex: 1;">
+      <h2>Next steps</h2>
+      <div class="card" style="margin-bottom: 10px;"><b>Assignment 2: model training pipeline.</b><p class="note" style="margin:4px 0 0;">Read both gold tables, apply the join contract, split by application month, fit imputation and scaling on train only, and register the model with its feature list and label definition.</p></div>
+      <div class="card" style="margin-bottom: 10px;"><b>Schedule the monthly jobs.</b><p class="note" style="margin:4px 0 0;">Each layer function already takes a single <code>snapshot_date</code>; wrapping them as tasks in an orchestrator (for example Airflow) turns the backfill loop into a scheduled DAG with one run per month.</p></div>
+      <div class="card" style="margin-bottom: 10px;"><b>Data quality monitoring.</b><p class="note" style="margin:4px 0 0;">Log row counts, null shares and the share of rows hit by each silver rule per partition, and alert when a month drifts (for example a jump in placeholder values or in the clickstream averages).</p></div>
+      <div class="card"><b>Widen the feature store when the feeds allow.</b><p class="note" style="margin:4px 0 0;">Attributes and financials are captured once per customer today; if the source systems refresh them monthly, the same gold job can serve every customer every month, enabling re-scoring beyond the application moment.</p></div>
+    </div>
+  </div>
+  <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>10 / 10</span></div>
+</section>
+
+</body>
+</html>

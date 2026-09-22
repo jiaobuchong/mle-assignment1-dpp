@@ -168,3 +168,8 @@ temp/
 *.key
 secrets.yaml
 secrets.json
+
+# ---------------------------------------------------------------------------
+# Generated datamart (created by main.py, excluded from repo and submission)
+# ---------------------------------------------------------------------------
+datamart/
