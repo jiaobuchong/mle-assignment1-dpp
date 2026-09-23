@@ -172,14 +172,13 @@ def process_silver_financials_table(snapshot_date_str, bronze_financials_directo
 
     # clean data: impossible values e.g. 1756 bank accounts, 5789% interest, -100 loans -> null
     valid_range = {
-        "Annual_Income": (0, 300000),
-        "Num_Bank_Accounts": (0, 20),
-        "Num_Credit_Card": (0, 20),
+        "Annual_Income": (0, 5000000),
+        "Num_Bank_Accounts": (0, 30),
+        "Num_Credit_Card": (0, 30),
         "Interest_Rate": (0, 100),
         "Num_of_Loan": (0, 20),
-        "Num_of_Delayed_Payment": (0, 50),
-        "Num_Credit_Inquiries": (0, 50),
-        "Total_EMI_per_month": (0, 5000),
+        "Num_of_Delayed_Payment": (0, 100),
+        "Num_Credit_Inquiries": (0, 1000),
     }
     for column, (low, high) in valid_range.items():
         df = df.withColumn(column, F.when((col(column) >= low) & (col(column) <= high), col(column)))
