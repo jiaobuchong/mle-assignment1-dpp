@@ -66,16 +66,22 @@ bronze_clickstream_directory = "datamart/bronze/clickstream/"
 bronze_attributes_directory = "datamart/bronze/attributes/"
 bronze_financials_directory = "datamart/bronze/financials/"
 
-for directory in [bronze_lms_directory, bronze_clickstream_directory, bronze_attributes_directory, bronze_financials_directory]:
+# one entry per raw source: table name -> (bronze directory, raw csv path)
+bronze_sources = {
+    "loan_daily": (bronze_lms_directory, "data/lms_loan_daily.csv"),
+    "clickstream": (bronze_clickstream_directory, "data/feature_clickstream.csv"),
+    "attributes": (bronze_attributes_directory, "data/features_attributes.csv"),
+    "financials": (bronze_financials_directory, "data/features_financials.csv"),
+}
+
+for directory, _ in bronze_sources.values():
     if not os.path.exists(directory):
         os.makedirs(directory)
 
 # run bronze backfill
 for date_str in dates_str_lst:
-    utils.data_processing_bronze_table.process_bronze_table(date_str, bronze_lms_directory, spark)
-    utils.data_processing_bronze_table.process_bronze_feature_table(date_str, bronze_clickstream_directory, spark, "clickstream", "data/feature_clickstream.csv")
-    utils.data_processing_bronze_table.process_bronze_feature_table(date_str, bronze_attributes_directory, spark, "attributes", "data/features_attributes.csv")
-    utils.data_processing_bronze_table.process_bronze_feature_table(date_str, bronze_financials_directory, spark, "financials", "data/features_financials.csv")
+    for table_name, (directory, csv_file_path) in bronze_sources.items():
+        utils.data_processing_bronze_table.process_bronze_table(date_str, directory, spark, table_name, csv_file_path)
 
 
 # create silver datalake
