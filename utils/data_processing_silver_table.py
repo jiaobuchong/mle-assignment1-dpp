@@ -22,6 +22,9 @@ def process_silver_table(snapshot_date_str, bronze_lms_directory, silver_loan_da
     # connect to bronze table
     partition_name = "bronze_loan_daily_" + snapshot_date_str.replace('-','_') + '.csv'
     filepath = bronze_lms_directory + partition_name
+    if not os.path.exists(filepath):
+        print('no data, skipped:', filepath)
+        return None
     df = spark.read.csv(filepath, header=True, inferSchema=True)
     print('loaded from:', filepath, 'row count:', df.count())
 
@@ -67,6 +70,9 @@ def process_silver_clickstream_table(snapshot_date_str, bronze_clickstream_direc
     # connect to bronze table
     partition_name = "bronze_clickstream_" + snapshot_date_str.replace('-','_') + '.csv'
     filepath = bronze_clickstream_directory + partition_name
+    if not os.path.exists(filepath):
+        print('no data, skipped:', filepath)
+        return None
     df = spark.read.csv(filepath, header=True, inferSchema=True)
     print('loaded from:', filepath, 'row count:', df.count())
 
@@ -94,6 +100,9 @@ def process_silver_attributes_table(snapshot_date_str, bronze_attributes_directo
     # connect to bronze table
     partition_name = "bronze_attributes_" + snapshot_date_str.replace('-','_') + '.csv'
     filepath = bronze_attributes_directory + partition_name
+    if not os.path.exists(filepath):
+        print('no data, skipped:', filepath)
+        return None
     df = spark.read.csv(filepath, header=True, inferSchema=True)
     print('loaded from:', filepath, 'row count:', df.count())
 
@@ -130,6 +139,9 @@ def process_silver_financials_table(snapshot_date_str, bronze_financials_directo
     # connect to bronze table
     partition_name = "bronze_financials_" + snapshot_date_str.replace('-','_') + '.csv'
     filepath = bronze_financials_directory + partition_name
+    if not os.path.exists(filepath):
+        print('no data, skipped:', filepath)
+        return None
     df = spark.read.csv(filepath, header=True, inferSchema=True)
     print('loaded from:', filepath, 'row count:', df.count())
 

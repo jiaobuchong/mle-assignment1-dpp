@@ -23,11 +23,19 @@ def process_labels_gold_table(snapshot_date_str, silver_loan_daily_directory, go
     # connect to silver table
     partition_name = "silver_loan_daily_" + snapshot_date_str.replace('-','_') + '.parquet'
     filepath = silver_loan_daily_directory + partition_name
+    if not os.path.exists(filepath):
+        print('no data, skipped:', filepath)
+        return None
     df = spark.read.parquet(filepath)
     print('loaded from:', filepath, 'row count:', df.count())
 
     # get customer at mob
     df = df.filter(col("mob") == mob)
+
+    # no loan is at this mob in this month (e.g. the first 6 months), nothing to save
+    if df.count() == 0:
+        print('no loans at mob', mob, 'in', snapshot_date_str + ', skipped')
+        return df
 
     # get label
     df = df.withColumn("label", F.when(col("dpd") >= dpd, 1).otherwise(0).cast(IntegerType()))
@@ -55,6 +63,9 @@ def process_features_gold_table(snapshot_date_str, silver_attributes_directory, 
     # connect to silver tables (attributes and financials are captured at loan application = snapshot_date)
     attributes_filepath = silver_attributes_directory + "silver_attributes_" + snapshot_date_str.replace('-','_') + '.parquet'
     financials_filepath = silver_financials_directory + "silver_financials_" + snapshot_date_str.replace('-','_') + '.parquet'
+    if not os.path.exists(attributes_filepath) or not os.path.exists(financials_filepath):
+        print('no data, skipped:', attributes_filepath)
+        return None
     attributes_df = spark.read.parquet(attributes_filepath)
     financials_df = spark.read.parquet(financials_filepath)
     print('loaded from:', attributes_filepath, 'row count:', attributes_df.count())

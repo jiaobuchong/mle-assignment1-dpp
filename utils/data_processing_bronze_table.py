@@ -24,7 +24,13 @@ def process_bronze_table(snapshot_date_str, bronze_directory, spark, table_name,
 
     # load data - IRL ingest from back end source system
     df = spark.read.csv(csv_file_path, header=True, inferSchema=True).filter(col('snapshot_date') == snapshot_date)
-    print(table_name, snapshot_date_str, 'row count:', df.count())
+    row_count = df.count()
+    print(table_name, snapshot_date_str, 'row count:', row_count)
+
+    # skip months without data, so no empty partition is saved
+    if row_count == 0:
+        print('no data, skipped')
+        return df
 
     # save bronze table to datamart - IRL connect to database to write
     partition_name = "bronze_" + table_name + "_" + snapshot_date_str.replace('-','_') + '.csv'

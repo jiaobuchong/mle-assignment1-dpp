@@ -107,10 +107,10 @@
     </div>
     <div class="col" style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start;">
       <div class="tile"><div class="v">4 &rarr; 10</div><div class="l">raw feeds turned into 10 tables across bronze, silver and gold</div></div>
-      <div class="tile"><div class="v">24</div><div class="l">monthly partitions per table, Jan 2023 to Dec 2024, rebuilt in 61 seconds</div></div>
-      <div class="tile"><div class="v">110</div><div class="l">numeric features per customer application, 11,974 rows in the feature store</div></div>
-      <div class="tile"><div class="v">8,974</div><div class="l">labelled loans in the label store, 28.9% default rate, every one matched to features</div></div>
-      <div class="tile" style="grid-column: 1 / -1;"><div class="v">0.86 AUC</div><div class="l">out-of-time sanity model (logistic regression 0.855, gradient boosting 0.870): predictive, and far from the ~1.0 that would signal leakage</div></div>
+      <div class="tile"><div class="v">36</div><div class="l">monthly runs, Jan 2023 to Dec 2025, one partition per month with data, rebuilt in 80 seconds</div></div>
+      <div class="tile"><div class="v">110</div><div class="l">numeric features per customer application, 12,500 rows in the feature store</div></div>
+      <div class="tile"><div class="v">12,500</div><div class="l">labelled loans in the label store, 28.8% default rate, every one matched to features</div></div>
+      <div class="tile" style="grid-column: 1 / -1;"><div class="v">0.81 to 0.84 AUC</div><div class="l">out-of-time sanity model (logistic regression 0.806, gradient boosting 0.836; 0.853 and 0.868 for applicants with clickstream): predictive, and far from the ~1.0 that would signal leakage</div></div>
     </div>
   </div>
   <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>2 / 10</span></div>
@@ -127,8 +127,8 @@
       <tbody>
         <tr><td><code>lms_loan_daily.csv</code></td><td>loan &times; month (installment 0 to 10)</td><td class="num">137,500</td><td>12,500 loans, one per customer, started Jan 2023 to Jan 2025, tracked to Nov 2025</td><td>Label store (Lab 2). <b>Never</b> a feature source.</td><td>Clean. Loan amount (10,000) and tenure (10) are constant, so they carry no signal.</td></tr>
         <tr><td><code>features_attributes.csv</code></td><td>customer at application</td><td class="num">12,500</td><td>One row per customer; <code>snapshot_date</code> equals the loan start month for 100% of customers</td><td>Demographic features</td><td>Age as text with stray underscores and values such as -500 and 8,678; occupation placeholder <code>_______</code> (7%); SSN garbage <code>#F%$D@*&amp;8</code> (5.6%); name and SSN are PII.</td></tr>
-        <tr><td><code>features_financials.csv</code></td><td>customer at application</td><td class="num">12,500</td><td>Same population and dates as attributes</td><td>Financial profile features</td><td>52% of rows carry at least one defect: trailing <code>_</code> on numbers, placeholders <code>__10000__</code> / <code>_</code> / <code>!@9#%8</code>, impossible counts (1,756 bank accounts, 5,789% interest), credit history as text, loan types as a comma list.</td></tr>
-        <tr><td><code>feature_clickstream.csv</code></td><td>customer &times; month</td><td class="num">215,376</td><td>8,974 customers &times; 24 months (Jan 2023 to Dec 2024), exactly the customers that receive a label</td><td>Behavioural features</td><td>Clean values, but 61% of rows are dated <b>after</b> the customer's application: a temporal leakage trap if joined naively.</td></tr>
+        <tr><td><code>features_financials.csv</code></td><td>customer at application</td><td class="num">12,500</td><td>Same population and dates as attributes</td><td>Financial profile features</td><td>50% of rows carry at least one defect: trailing <code>_</code> on numbers, placeholders <code>__10000__</code> / <code>_</code> / <code>!@9#%8</code>, impossible counts (1,756 bank accounts, 5,789% interest), credit history as text, loan types as a comma list.</td></tr>
+        <tr><td><code>feature_clickstream.csv</code></td><td>customer &times; month</td><td class="num">215,376</td><td>8,974 customers &times; 24 months (Jan 2023 to Dec 2024): every applicant up to Jun 2024. The 3,526 later applicants have none.</td><td>Behavioural features</td><td>Clean values, but 61% of rows are dated <b>after</b> the customer's application: a temporal leakage trap if joined naively.</td></tr>
       </tbody>
     </table>
     <div style="display:flex; gap: 20px; flex: 1;">
@@ -158,7 +158,7 @@
 <section class="slide">
   <div class="kicker">Architecture</div>
   <h1>Each source moves through bronze, silver and gold as an independent monthly job; the gold layer serves exactly two tables to the model</h1>
-  <p class="lead">Ten tables, each partitioned by <code>snapshot_date</code> with one file per month. Every partition can be rebuilt from the layer before it, so a bug fix is a re-run, not a manual repair.</p>
+  <p class="lead">Ten tables, each partitioned by <code>snapshot_date</code> with one file per month that has data. Every partition can be rebuilt from the layer before it, so a bug fix is a <span style="white-space: nowrap;">re-run</span>, not a manual repair.</p>
   <div class="body" style="flex-direction: column; gap: 14px;">
     <div style="display: grid; grid-template-columns: 170px 28px 220px 28px 220px 28px 260px 28px 160px; gap: 0; align-items: stretch;">
       <div class="layer src"><h3>Raw sources</h3>
@@ -186,7 +186,7 @@
     <div class="card" style="display:flex; gap: 26px; font-size: 12.5px; padding: 10px 16px;">
       <div><b>Stack</b> &nbsp;PySpark 3.5 · Parquet · Docker (Python 3.12, OpenJDK 17) · JupyterLab</div>
       <div><b>Code</b> &nbsp;<code>main.py</code> orchestrates; <code>utils/</code> holds one module per layer with one function per table</div>
-      <div><b>Schedule</b> &nbsp;monthly backfill loop, 24 runs (2023-01 to 2024-12), 61 s end to end</div>
+      <div><b>Schedule</b> &nbsp;monthly backfill loop, 36 runs (<span style="white-space: nowrap;">2023-01 to 2025-12</span>), 80 s end to end</div>
     </div>
   </div>
   <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>4 / 10</span></div>
@@ -201,26 +201,28 @@
     <div class="col" style="flex: 0 0 520px;">
       <h2>Design choices</h2>
       <ul>
-        <li><b>One partition per <code>snapshot_date</code>.</b> A monthly job reads the source, keeps the rows of that snapshot and writes <code>bronze_&lt;table&gt;_YYYY_MM_DD.csv</code>. Backfilling history and running the next month are the same code path.</li>
+        <li><b>One partition per <code>snapshot_date</code>.</b> A monthly job reads the source, keeps the rows of that snapshot and writes <code>bronze_&lt;table&gt;_YYYY_MM_DD.csv</code>. Backfilling history and running the next month are the same code path. A month without source rows writes no file, and silver and gold skip it.</li>
         <li><b>Raw fidelity over convenience.</b> Values such as <code>52312.68_</code> or <code>__10000__</code> are landed exactly as received; csv keeps them human-readable for investigation.</li>
-        <li><b>Two small functions, four sources.</b> The Lab 2 function is kept as is for the loan ledger; a second one takes the table name and csv path and is called three times from <code>main.py</code>, so adding a feed is one more call.</li>
+        <li><b>One function, four sources.</b> The Lab 2 function now also takes the table name and csv path; <code>main.py</code> calls it once per source, so adding a feed is one more entry in <code>bronze_sources</code>.</li>
         <li><b>Source-system boundary.</b> In production the csv read is the only line that changes: it becomes the database or API connector.</li>
       </ul>
       <pre style="margin-top: 10px;"><span class="c"># utils/data_processing_bronze_table.py</span>
 df = spark.read.csv(csv_file_path, header=True, inferSchema=True) \
           .filter(col("snapshot_date") == snapshot_date)
+if df.count() == 0:
+    return df          <span class="c"># no rows this month: no partition</span>
 partition_name = "bronze_" + table_name + "_" + date + ".csv"
 df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
     </div>
     <div class="col" style="flex: 1;">
-      <h2>Bronze tables produced by <code>main.py</code> (24 monthly partitions each)</h2>
+      <h2>Bronze tables produced by <code>main.py</code> (one partition per month with data)</h2>
       <table>
-        <thead><tr><th>Table</th><th>Partition file</th><th class="num">Rows / partition</th><th class="num">Rows, 24 months</th><th>Note</th></tr></thead>
+        <thead><tr><th>Table</th><th>Partition file</th><th class="num">Rows / partition</th><th class="num">Total rows</th><th>Note</th></tr></thead>
         <tbody>
-          <tr><td>lms</td><td><code>bronze_loan_daily_&lt;date&gt;.csv</code></td><td class="num">530 &rarr; 5,531</td><td class="num">104,288</td><td>Ledger grows as loans accumulate</td></tr>
-          <tr><td>clickstream</td><td><code>bronze_clickstream_&lt;date&gt;.csv</code></td><td class="num">8,974</td><td class="num">215,376</td><td>Same customer set every month</td></tr>
-          <tr><td>attributes</td><td><code>bronze_attributes_&lt;date&gt;.csv</code></td><td class="num">454 to 543</td><td class="num">11,974</td><td>That month's applicants</td></tr>
-          <tr><td>financials</td><td><code>bronze_financials_&lt;date&gt;.csv</code></td><td class="num">454 to 543</td><td class="num">11,974</td><td>That month's applicants</td></tr>
+          <tr><td>lms</td><td><code>bronze_loan_daily_&lt;date&gt;.csv</code></td><td class="num">526 to 5,539</td><td class="num">137,500</td><td>35 months; grows, then runs off</td></tr>
+          <tr><td>clickstream</td><td><code>bronze_clickstream_&lt;date&gt;.csv</code></td><td class="num">8,974</td><td class="num">215,376</td><td>24 months; same customers</td></tr>
+          <tr><td>attributes</td><td><code>bronze_attributes_&lt;date&gt;.csv</code></td><td class="num">454 to 543</td><td class="num">12,500</td><td>25 months; that month's applicants</td></tr>
+          <tr><td>financials</td><td><code>bronze_financials_&lt;date&gt;.csv</code></td><td class="num">454 to 543</td><td class="num">12,500</td><td>25 months; that month's applicants</td></tr>
         </tbody>
       </table>
       <div class="card" style="margin-top: 14px;">
@@ -243,10 +245,10 @@ df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
         <thead><tr><th style="width:150px;">Rule</th><th style="width:220px;">Raw example &rarr; silver</th><th>Why</th></tr></thead>
         <tbody>
           <tr><td><b>Schema enforcement</b></td><td>all 4 tables cast column by column</td><td>Types are guaranteed downstream; dates become <code>DateType</code>, counts integers, amounts floats.</td></tr>
-          <tr><td><b>Stray underscore</b></td><td><code>52312.68_</code> &rarr; 52312.68, <code>3_</code> &rarr; 3</td><td>Formatting noise on otherwise valid numbers (8% of incomes, 5% of loan counts).</td></tr>
+          <tr><td><b>Stray underscore</b></td><td><code>52312.68_</code> &rarr; 52312.68, <code>3_</code> &rarr; 3</td><td>Formatting noise on otherwise valid numbers (7% of incomes, 5% of loan counts).</td></tr>
           <tr><td><b>Placeholder starting with underscore</b></td><td><code>__10000__</code>, <code>_</code> &rarr; null</td><td>A sentinel, not a measurement; keeping 10,000 as an investment amount would be wrong.</td></tr>
           <tr><td><b>Categorical whitelist</b></td><td><code>_______</code>, <code>_</code>, <code>!@9#%8</code> &rarr; null</td><td>Occupation, credit mix and payment behaviour only accept their known vocabularies.</td></tr>
-          <tr><td><b>Plausible ranges</b></td><td>Age (1 to 100), accounts and cards (0 to 20), interest (0 to 100%), loans (0 to 20), delayed payments and inquiries (0 to 50), EMI (&le; 5,000), income (&le; 300,000)</td><td>Values such as -500 years old, 1,756 bank accounts or 5,789% interest sit far outside a clear gap in the distribution.</td></tr>
+          <tr><td><b>Plausible ranges</b></td><td>Age (1 to 100), accounts and cards (0 to 30), interest (0 to 100%), loans (0 to 20), delayed payments (0 to 100), inquiries (0 to 1,000), income (&le; 5,000,000)</td><td>Values such as -500 years old, 1,756 bank accounts or 5,789% interest sit far outside a clear gap in the distribution.</td></tr>
           <tr><td><b>Conform text to a number</b></td><td><code>10 Years and 9 Months</code> &rarr; 129</td><td>Credit history length becomes months, directly usable by a model.</td></tr>
           <tr><td><b>PII left out</b></td><td>Name, SSN (incl. garbage <code>#F%$D@*&amp;8</code>)</td><td>Kept in silver for lineage only; the gold feature store never reads them.</td></tr>
         </tbody>
@@ -254,13 +256,13 @@ df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
     </div>
     <div class="col" style="flex: 1;">
       <div class="chart-title">Share of application rows affected, by issue</div>
-      <div class="chart-sub">12,500 customer applications; a row can carry several defects (52% of financial rows do)</div>
+      <div class="chart-sub">12,500 customer applications; a row can carry several defects (50% of financial rows have at least one)</div>
       <svg width="440" height="280" viewBox="0 0 440 280" role="img" aria-label="Bar chart of the share of rows affected per data quality issue">
         <g font-size="11" fill="#52514e">
           <text x="162" y="22" text-anchor="end">Credit mix "_"</text>
           <text x="162" y="51" text-anchor="end">Num. of loans "_" / -100</text>
           <text x="162" y="80" text-anchor="end">Payment behaviour code</text>
-          <text x="162" y="109" text-anchor="end">Annual income "_" / &gt;300k</text>
+          <text x="162" y="109" text-anchor="end">Annual income "_" / &gt;5M</text>
           <text x="162" y="138" text-anchor="end">Age text / out of range</text>
           <text x="162" y="167" text-anchor="end">Occupation "_______"</text>
           <text x="162" y="196" text-anchor="end">SSN invalid</text>
@@ -271,7 +273,7 @@ df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
           <rect x="170" y="8" width="220" height="19" rx="3"/>
           <rect x="170" y="37" width="100" height="19" rx="3"/>
           <rect x="170" y="66" width="84" height="19" rx="3"/>
-          <rect x="170" y="95" width="81" height="19" rx="3"/>
+          <rect x="170" y="95" width="80" height="19" rx="3"/>
           <rect x="170" y="124" width="79" height="19" rx="3"/>
           <rect x="170" y="153" width="74" height="19" rx="3"/>
           <rect x="170" y="182" width="59" height="19" rx="3"/>
@@ -281,18 +283,18 @@ df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
           <text x="395" y="22">20.9%</text>
           <text x="275" y="51">9.5%</text>
           <text x="259" y="80">8.0%</text>
-          <text x="256" y="109">7.7%</text>
+          <text x="255" y="109">7.6%</text>
           <text x="254" y="138">7.5%</text>
           <text x="249" y="167">7.0%</text>
           <text x="234" y="196">5.6%</text>
           <text x="222" y="225">4.5%</text>
         </g>
-        <text x="8" y="252" font-size="10.5" fill="#898781">Eight further rules affect 1% to 4% of rows each</text>
-        <text x="8" y="265" font-size="10.5" fill="#898781">(EMI, cards, interest, credit limit, inquiries, accounts, debt, balance).</text>
+        <text x="8" y="252" font-size="10.5" fill="#898781">Seven further rules affect 1% to 4.4% of rows each (delayed payments,</text>
+        <text x="8" y="265" font-size="10.5" fill="#898781">cards, interest, credit limit, accounts, debt, inquiries).</text>
       </svg>
       <div class="card" style="margin-top: 6px;">
         <h2>Why null and not a fix</h2>
-        <p class="note">Clipping 1,756 accounts to 20 or filling an unknown age with the average would present an invented number as fact. Null is honest, is handled natively by gradient boosting models, and lets the model pipeline impute with statistics learned from the training split only.</p>
+        <p class="note">Clipping 1,756 accounts to 30 or filling an unknown age with the average would present an invented number as fact. Null is honest, is handled natively by gradient boosting models, and lets the model pipeline impute with statistics learned from the training split only.</p>
       </div>
     </div>
   </div>
@@ -314,11 +316,11 @@ df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
           <tr><td><b>Affordability ratios</b></td><td class="num">4</td><td><code>debt_to_income</code>, <code>emi_to_salary</code>, <code>invest_to_salary</code>, <code>balance_to_salary</code></td></tr>
           <tr><td><b>Encoded categoricals</b></td><td class="num">4</td><td><code>credit_mix_score</code> (Bad 0 &lt; Standard 1 &lt; Good 2), <code>pays_min_amount</code>, <code>high_spent</code>, <code>payment_value_size</code> (Small 1 &lt; Medium 2 &lt; Large 3)</td></tr>
           <tr><td><b>Existing loan portfolio</b></td><td class="num">9</td><td>one flag per loan type found in <code>Type_of_Loan</code>: auto, credit-builder, debt consolidation, home equity, mortgage, payday, personal, student, not specified (the count itself is <code>Num_of_Loan</code>)</td></tr>
-          <tr><td><b>Clickstream behaviour</b></td><td class="num">61</td><td>for each of <code>fe_1</code> to <code>fe_20</code>: value in the application month, 3-month and 6-month averages over the window ending there; plus the number of months observed</td></tr>
+          <tr><td><b>Clickstream behaviour</b></td><td class="num">61</td><td>for each of <code>fe_1</code> to <code>fe_20</code>: value in the application month, 3-month and 6-month averages over the window ending there; plus the number of months observed. All null for the 3,526 applicants from Jul 2024, who have no clickstream</td></tr>
         </tbody>
       </table>
       <div style="display:flex; gap: 12px; margin-top: 10px;">
-        <div class="card" style="flex:1; padding: 10px 14px;"><h2>Grain and keys</h2><p class="note"><code>Customer_ID</code> + <code>snapshot_date</code> (application month). 11,974 rows, no duplicate keys, one parquet partition per month: <code>gold_feature_store_YYYY_MM_DD.parquet</code>.</p></div>
+        <div class="card" style="flex:1; padding: 10px 14px;"><h2>Grain and keys</h2><p class="note"><code>Customer_ID</code> + <code>snapshot_date</code> (application month). 12,500 rows, no duplicate keys, one parquet partition per month: <code>gold_feature_store_YYYY_MM_DD.parquet</code>.</p></div>
         <div class="card" style="flex:1; padding: 10px 14px;"><h2>Join contract with the label store</h2><p class="note"><code>feature.Customer_ID = label.Customer_ID</code> and <code>feature.snapshot_date = add_months(label.snapshot_date, -6)</code>. The 6 months match the label definition <code>30dpd_6mob</code>.</p></div>
       </div>
     </div>
@@ -389,7 +391,7 @@ df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
     <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; flex: 1;">
       <div class="card"><h2>Temporal leakage</h2><p class="note" style="font-size:13px;"><b>Risk:</b> 61% of clickstream rows are dated after the application, and a naive join on the label's <code>snapshot_date</code> would use activity from month D+6.<br><b>Control:</b> the gold job keeps only clickstream rows with <code>0 &le; months before D &lt; 6</code>, so nothing dated after D is aggregated. Verified per customer: an applicant of June 2024 has 18 months of history, the window uses the last 6, and the 6 later months are untouched.</p></div>
       <div class="card"><h2>Target leakage</h2><p class="note" style="font-size:13px;"><b>Risk:</b> repayment fields (overdue amount, days past due, balance) describe the outcome itself.<br><b>Control:</b> the loan ledger feeds only the label pipeline. No column from <code>lms_loan_daily</code> exists in the feature store, and the label store carries just the key, the label and its definition.</p></div>
-      <div class="card"><h2>Train-test contamination</h2><p class="note" style="font-size:13px;"><b>Risk:</b> scaling, imputing or encoding with statistics of the full dataset leaks the test set into training.<br><b>Control:</b> gold stores raw numeric values with nulls; no global statistic is computed in the pipeline. The sanity model splits by application month (train &lt; 2024, test 2024 H1) and fits its imputer and scaler on train only.</p></div>
+      <div class="card"><h2>Train-test contamination</h2><p class="note" style="font-size:13px;"><b>Risk:</b> scaling, imputing or encoding with statistics of the full dataset leaks the test set into training.<br><b>Control:</b> gold stores raw numeric values with nulls; no global statistic is computed in the pipeline. The sanity model splits by application month (train 2023, test Jan 2024 to Jan 2025) and fits its imputer and scaler on train only.</p></div>
     </div>
   </div>
   <div class="footer"><span><b>CS611 Assignment 1</b> &nbsp;·&nbsp; Data Processing Pipelines &nbsp;·&nbsp; Loan default feature store</span><span>8 / 10</span></div>
@@ -398,35 +400,36 @@ df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
 <!-- ============================== 9 VALIDATION ============================== -->
 <section class="slide">
   <div class="kicker">Validation</div>
-  <h1>The pipeline runs cleanly in Docker, every labelled loan finds its features, and a simple model generalises out of time with an AUC of 0.86</h1>
+  <h1>The pipeline runs cleanly in Docker, every labelled loan finds its features, and a simple model generalises out of time with an AUC of 0.81 to 0.84</h1>
   <p class="lead">Validation covers the mechanics (does it run, are the counts right), the contract (does the join work) and the substance (are the features predictive without leaking).</p>
   <div class="body">
     <div class="col" style="flex: 0 0 560px;">
-      <h2>Pipeline run (<code>python main.py</code>, 61 seconds)</h2>
+      <h2>Pipeline run (<code>python main.py</code>, 80 seconds)</h2>
       <table class="compact">
         <thead><tr><th>Layer</th><th class="num">Tables</th><th class="num">Partitions</th><th>Rows</th></tr></thead>
         <tbody>
-          <tr><td><span class="tag bronze">Bronze</span></td><td class="num">4</td><td class="num">96</td><td>104,288 ledger · 215,376 clickstream · 11,974 attributes · 11,974 financials</td></tr>
-          <tr><td><span class="tag silver">Silver</span></td><td class="num">4</td><td class="num">96</td><td>same row counts, typed and cleaned, 0 duplicate keys</td></tr>
-          <tr><td><span class="tag gold">Gold</span></td><td class="num">2</td><td class="num">48</td><td>feature store 11,974 &times; 112 columns · label store 8,974 loans</td></tr>
+          <tr><td><span class="tag bronze">Bronze</span></td><td class="num">4</td><td class="num">109</td><td>137,500 ledger · 215,376 clickstream · 12,500 attributes · 12,500 financials</td></tr>
+          <tr><td><span class="tag silver">Silver</span></td><td class="num">4</td><td class="num">109</td><td>same row counts, typed and cleaned, 0 duplicate keys</td></tr>
+          <tr><td><span class="tag gold">Gold</span></td><td class="num">2</td><td class="num">50</td><td>feature store 12,500 &times; 112 columns · labels 12,500</td></tr>
         </tbody>
       </table>
       <h2 style="margin-top: 14px;">Sanity model (<code>python sanity_check_model.py</code>, not part of the pipeline)</h2>
       <table class="compact">
         <thead><tr><th>Check</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td>Label rows matched to features via the join contract</td><td><b>8,974 of 8,974</b>, all with clickstream history</td></tr>
-          <tr><td>Out-of-time split by application month</td><td>train 5,958 (Jan to Dec 2023) · test 3,016 (Jan to Jun 2024)</td></tr>
-          <tr><td>Logistic regression (median impute + scale, fit on train)</td><td>train AUC 0.852 · <b>test AUC 0.855</b></td></tr>
-          <tr><td>Gradient boosting (nulls handled natively)</td><td>train AUC 0.941 · <b>test AUC 0.870</b></td></tr>
+          <tr><td>Labels matched to features</td><td><b>12,500 of 12,500</b>; 3,526 have no clickstream</td></tr>
+          <tr><td>Out-of-time split by application month</td><td>train 5,958 (2023) · test 6,542 (2024 to Jan 2025)</td></tr>
+          <tr><td>Logistic regression (median impute + scale, fit on train)</td><td>train AUC 0.850 · <b>test AUC 0.806</b></td></tr>
+          <tr><td>Gradient boosting (nulls handled natively)</td><td>train AUC 0.943 · <b>test AUC 0.836</b></td></tr>
+          <tr><td>Test AUC with / without clickstream</td><td>LR <b>0.853</b> / 0.760 · GB <b>0.868</b> / 0.807</td></tr>
         </tbody>
       </table>
-      <p class="note" style="margin-top: 8px;">Test AUC close to train AUC and well below 1.0 is the signature of an informative, leakage-free feature store. Strongest linear drivers: salary, income, 6-month clickstream averages, interest rate. Tuning is left to Assignment 2.</p>
+      <p class="note" style="margin-top: 8px;">Test AUC well below 1.0 rules out leakage. It is lower for the newest applicants, who have no clickstream while every 2023 training applicant does. Strongest linear drivers: interest rate, clickstream averages, credit limit change, payment delay.</p>
     </div>
     <div class="col" style="flex: 1;">
-      <div class="chart-title">Default rate by application month (label store, 8,974 loans)</div>
+      <div class="chart-title">Default rate by application month (label store, 12,500 loans)</div>
       <div class="chart-sub">Share of loans 30+ days past due at month 6. The base rate is stable around 29%, so the label is usable for training without re-weighting.</div>
-      <svg width="560" height="250" viewBox="0 0 560 250" role="img" aria-label="Line chart of the monthly default rate from January 2023 to June 2024, between 25.7% and 32.9%">
+      <svg width="560" height="250" viewBox="0 0 560 250" role="img" aria-label="Line chart of the monthly default rate from January 2023 to January 2025, between 24.6% and 33.1%">
         <g stroke="#e1e0d9" stroke-width="1">
           <line x1="50" y1="20" x2="540" y2="20"/><line x1="50" y1="70" x2="540" y2="70"/><line x1="50" y1="120" x2="540" y2="120"/><line x1="50" y1="170" x2="540" y2="170"/>
         </g>
@@ -434,24 +437,24 @@ df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
         <g font-size="10.5" fill="#898781" text-anchor="end">
           <text x="44" y="24">40%</text><text x="44" y="74">35%</text><text x="44" y="124">30%</text><text x="44" y="174">25%</text><text x="44" y="224">20%</text>
         </g>
-        <line x1="50" y1="131.3" x2="540" y2="131.3" stroke="#898781" stroke-width="1" stroke-dasharray="3 3"/>
-        <text x="173" y="127" font-size="10.5" fill="#898781" text-anchor="middle">overall 28.9%</text>
-        <polyline fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" points="60,156 88.2,113 116.5,100 144.7,151 172.9,153 201.2,155 229.4,123 257.6,131 285.9,158 314.1,163 342.4,129 370.6,111 398.8,123 427.1,136 455.3,91 483.5,143 511.8,117 540,109"/>
+        <line x1="50" y1="131.8" x2="540" y2="131.8" stroke="#898781" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="540" y="127" font-size="10.5" fill="#898781" text-anchor="end">overall 28.8%</text>
+        <polyline fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" points="60,155.8 80,112.6 100,99.8 120,151.4 140,153.2 160,155 180,122.8 200,131 220,157.9 240,163.3 260,128.8 280,111.2 300,123.1 320,136.2 340,91.2 360,143.2 380,116.5 400,108.8 420,113.1 440,119.8 460,89.4 480,174.4 500,139.3 520,148.2 540,151.9"/>
         <g fill="#2a78d6" stroke="#ffffff" stroke-width="2">
-          <circle cx="60" cy="156" r="4"/><circle cx="88.2" cy="113" r="4"/><circle cx="116.5" cy="100" r="4"/><circle cx="144.7" cy="151" r="4"/><circle cx="172.9" cy="153" r="4"/><circle cx="201.2" cy="155" r="4"/><circle cx="229.4" cy="123" r="4"/><circle cx="257.6" cy="131" r="4"/><circle cx="285.9" cy="158" r="4"/><circle cx="314.1" cy="163" r="4"/><circle cx="342.4" cy="129" r="4"/><circle cx="370.6" cy="111" r="4"/><circle cx="398.8" cy="123" r="4"/><circle cx="427.1" cy="136" r="4"/><circle cx="455.3" cy="91" r="4"/><circle cx="483.5" cy="143" r="4"/><circle cx="511.8" cy="117" r="4"/><circle cx="540" cy="109" r="4"/>
+          <circle cx="60" cy="155.8" r="4"/><circle cx="80" cy="112.6" r="4"/><circle cx="100" cy="99.8" r="4"/><circle cx="120" cy="151.4" r="4"/><circle cx="140" cy="153.2" r="4"/><circle cx="160" cy="155" r="4"/><circle cx="180" cy="122.8" r="4"/><circle cx="200" cy="131" r="4"/><circle cx="220" cy="157.9" r="4"/><circle cx="240" cy="163.3" r="4"/><circle cx="260" cy="128.8" r="4"/><circle cx="280" cy="111.2" r="4"/><circle cx="300" cy="123.1" r="4"/><circle cx="320" cy="136.2" r="4"/><circle cx="340" cy="91.2" r="4"/><circle cx="360" cy="143.2" r="4"/><circle cx="380" cy="116.5" r="4"/><circle cx="400" cy="108.8" r="4"/><circle cx="420" cy="113.1" r="4"/><circle cx="440" cy="119.8" r="4"/><circle cx="460" cy="89.4" r="4"/><circle cx="480" cy="174.4" r="4"/><circle cx="500" cy="139.3" r="4"/><circle cx="520" cy="148.2" r="4"/><circle cx="540" cy="151.9" r="4"/>
         </g>
         <g font-size="11" fill="#0b0b0b" font-weight="600">
-          <text x="60" y="176" text-anchor="middle">26.4%</text><text x="455.3" y="82" text-anchor="middle">32.9%</text><text x="314.1" y="182" text-anchor="middle">25.7%</text><text x="540" y="99" text-anchor="end">31.1%</text>
+          <text x="66" y="174" text-anchor="start">26.4%</text><text x="460" y="80" text-anchor="middle">33.1%</text><text x="480" y="193" text-anchor="middle">24.6%</text><text x="540" y="171" text-anchor="end">26.8%</text>
         </g>
         <g font-size="10.5" fill="#898781" text-anchor="middle">
-          <text x="60" y="238">Jan 23</text><text x="144.7" y="238">Apr 23</text><text x="229.4" y="238">Jul 23</text><text x="314.1" y="238">Oct 23</text><text x="398.8" y="238">Jan 24</text><text x="483.5" y="238">Apr 24</text><text x="540" y="238">Jun 24</text>
+          <text x="60" y="238">Jan 23</text><text x="120" y="238">Apr 23</text><text x="180" y="238">Jul 23</text><text x="240" y="238">Oct 23</text><text x="300" y="238">Jan 24</text><text x="360" y="238">Apr 24</text><text x="420" y="238">Jul 24</text><text x="480" y="238">Oct 24</text><text x="540" y="238">Jan 25</text>
         </g>
       </svg>
       <div class="card" style="margin-top: 8px;">
         <h2>What was checked by hand</h2>
         <ul class="note" style="font-size: 12px;">
           <li>Clickstream aggregates recomputed from the raw file for a sample customer match the gold values exactly (latest, 3-month and 6-month means).</li>
-          <li>Occupation flags never exceed one per row; loan type flags match the text in <code>Type_of_Loan</code>; cleaned ages span 14 to 56, incomes stop at 180k.</li>
+          <li>Occupation flags never exceed one per row; loan type flags match the text in <code>Type_of_Loan</code>; cleaned ages span 14 to 56.</li>
         </ul>
       </div>
     </div>
@@ -471,23 +474,24 @@ df.toPandas().to_csv(bronze_directory + partition_name, index=False)</pre>
 docker-compose build
 docker-compose up
 
-<span class="c"># 2. in a JupyterLab terminal: build bronze, silver and gold (about 1 minute)</span>
+<span class="c"># 2. in a JupyterLab terminal: build bronze, silver and gold (about 80 seconds)</span>
 python main.py
 
 <span class="c"># 3. optional: join feature and label store, fit the sanity model</span>
 python sanity_check_model.py</pre>
       <h2 style="margin-top: 14px;">What <code>main.py</code> creates</h2>
       <pre>datamart/
-  bronze/  lms/  clickstream/  attributes/  financials/     24 csv each
-  silver/  loan_daily/  clickstream/  attributes/  financials/  24 parquet each
-  gold/    label_store/  feature_store/                     24 parquet each</pre>
+  bronze/  lms/ clickstream/ attributes/ financials/          csv
+  silver/  loan_daily/ clickstream/ attributes/ financials/   parquet
+  gold/    label_store/ feature_store/                        parquet
+<span class="c"># one file per month with data: ledger 35, clickstream 24, others 25</span></pre>
       <h2 style="margin-top: 14px;">Submission contents</h2>
       <p class="note"><code>main.py</code> · <code>Dockerfile</code> · <code>docker-compose.yaml</code> · <code>requirements.txt</code> · <code>utils/</code> (bronze, silver, gold modules) · <code>data/</code> · <code>Readme.txt</code> (repository link) · this deck as PDF. The <code>datamart/</code> folder is generated and excluded.</p>
       <p class="note" style="margin-top: 6px;"><b>Repository:</b> github.com/jiaobuchong/mle-assignment1-dpp</p>
     </div>
     <div class="col" style="flex: 1;">
       <h2>Next steps</h2>
-      <div class="card" style="margin-bottom: 10px;"><b>Assignment 2: model training pipeline.</b><p class="note" style="margin:4px 0 0;">Read both gold tables, apply the join contract, split by application month, fit imputation and scaling on train only, and register the model with its feature list and label definition.</p></div>
+      <div class="card" style="margin-bottom: 10px;"><b>Assignment 2: model training pipeline.</b><p class="note" style="margin:4px 0 0;">Read both gold tables, apply the join contract, split by application month, fit imputation and scaling on train only, handle applicants without clickstream (from Jul 2024), and register the model with its feature list and label definition.</p></div>
       <div class="card" style="margin-bottom: 10px;"><b>Schedule the monthly jobs.</b><p class="note" style="margin:4px 0 0;">Each layer function already takes a single <code>snapshot_date</code>; wrapping them as tasks in an orchestrator (for example Airflow) turns the backfill loop into a scheduled DAG with one run per month.</p></div>
       <div class="card" style="margin-bottom: 10px;"><b>Data quality monitoring.</b><p class="note" style="margin:4px 0 0;">Log row counts, null shares and the share of rows hit by each silver rule per partition, and alert when a month drifts (for example a jump in placeholder values or in the clickstream averages).</p></div>
       <div class="card"><b>Widen the feature store when the feeds allow.</b><p class="note" style="margin:4px 0 0;">Attributes and financials are captured once per customer today; if the source systems refresh them monthly, the same gold job can serve every customer every month, enabling re-scoring beyond the application moment.</p></div>
