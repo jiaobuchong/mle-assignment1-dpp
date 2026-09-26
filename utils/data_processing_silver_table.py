@@ -183,17 +183,23 @@ def process_silver_financials_table(snapshot_date_str, bronze_financials_directo
         df = df.withColumn(column, col(column).cast(new_type))
 
     # clean data: impossible values e.g. 1756 bank accounts, 5789% interest, -100 loans -> null
+    # each limit sits in the empty gap between normal and corrupted values (e.g. inquiries 0 to 17, corrupted from 26)
     valid_range = {
-        "Annual_Income": (0, 5000000),
-        "Num_Bank_Accounts": (0, 30),
-        "Num_Credit_Card": (0, 30),
-        "Interest_Rate": (0, 100),
-        "Num_of_Loan": (0, 20),
-        "Num_of_Delayed_Payment": (0, 100),
-        "Num_Credit_Inquiries": (0, 1000),
+        "Num_Bank_Accounts": (0, 15),
+        "Num_Credit_Card": (0, 15),
+        "Interest_Rate": (0, 50),
+        "Num_of_Loan": (0, 15),
+        "Num_of_Delayed_Payment": (0, 30),
+        "Num_Credit_Inquiries": (0, 20),
     }
     for column, (low, high) in valid_range.items():
         df = df.withColumn(column, F.when((col(column) >= low) & (col(column) <= high), col(column)))
+
+    # clean data: check income and EMI against the monthly salary (salary has no dirty values)
+    # yearly income is 0.7 to 1.9 times 12 salaries, corrupted incomes are 4.9 times or more -> limit 3 times
+    df = df.withColumn("Annual_Income", F.when(col("Annual_Income") <= 3 * 12 * col("Monthly_Inhand_Salary"), col("Annual_Income")))
+    # nobody can pay more than the whole salary in loan installments every month
+    df = df.withColumn("Total_EMI_per_month", F.when(col("Total_EMI_per_month") <= col("Monthly_Inhand_Salary"), col("Total_EMI_per_month")))
 
     # clean data: garbage categories "_" and "!@9#%8" -> null
     df = df.withColumn("Credit_Mix", F.when(col("Credit_Mix").isin("Bad", "Standard", "Good"), col("Credit_Mix")))
